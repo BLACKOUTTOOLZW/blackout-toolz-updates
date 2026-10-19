@@ -1,0 +1,26 @@
+name: Announce release to Discord
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post changelog to Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          TITLE: ${{ github.event.release.name }}
+          BODY: ${{ github.event.release.body }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          payload=$(jq -n \
+            --arg t "🟣 ${TITLE:-Blackout Toolz $TAG} is out" \
+            --arg d "${BODY:-A new version of Blackout Toolz is available.}" \
+            '{username:"Blackout Toolz",
+              embeds:[{title:$t,
+                       description:($d[0:4000]),
+                       color:10170623,
+                       footer:{text:"Open Blackout Toolz and click Update to get it."}}]}')
+          curl -sS -X POST -H "content-type: application/json" -d "$payload" "$WEBHOOK"
