@@ -3,20 +3,38 @@ name: Announce release to Discord
 on:
   release:
     types: [published]
+  workflow_dispatch: {}
 
 jobs:
   announce:
     runs-on: ubuntu-latest
     steps:
-      - name: Post changelog to Discord
+      - name: Resolve release info
+        id: rel
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EV_NAME: ${{ github.event.release.name }}
+          EV_BODY: ${{ github.event.release.body }}
+          EV_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [ -n "$EV_TAG" ]; then
+            TITLE="$EV_NAME"; TAG="$EV_TAG"; printf '%s' "$EV_BODY" > body.txt
+          else
+            TAG=$(gh release view -R "$REPO" --json tagName -q .tagName)
+            TITLE=$(gh release view -R "$REPO" --json name -q .name)
+            gh release view -R "$REPO" --json body -q .body > body.txt
+          fi
+          echo "title=${TITLE:-Blackout Toolz $TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Post to Discord
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          TITLE: ${{ github.event.release.name }}
-          BODY: ${{ github.event.release.body }}
-          TAG: ${{ github.event.release.tag_name }}
+          TITLE: ${{ steps.rel.outputs.title }}
         run: |
+          BODY=$(cat body.txt)
           payload=$(jq -n \
-            --arg t "🟣 ${TITLE:-Blackout Toolz $TAG} is out" \
+            --arg t "🟣 $TITLE is out" \
             --arg d "${BODY:-A new version of Blackout Toolz is available.}" \
             '{username:"Blackout Toolz",
               embeds:[{title:$t,
